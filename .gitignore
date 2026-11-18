@@ -1,0 +1,5 @@
+__pycache__/
+.pytest_cache/
+docs/index.html
+docs/metrics.csv
+docs/cot_oil.csv

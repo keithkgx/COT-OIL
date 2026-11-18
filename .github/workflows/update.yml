@@ -1,0 +1,62 @@
+name: Update COT data and publish dashboard
+
+on:
+  schedule:
+    # CFTC publishes Fridays ~15:30 US Eastern (19:30/20:30 UTC). Run after that,
+    # plus catch-ups for holiday delays (reports shift to Monday after some holidays).
+    - cron: "0 22 * * 5"
+    - cron: "0 14 * * 6"
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Full backfill from 2006 (instead of incremental)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: cot-update
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run tests
+        run: python -m pytest -q
+      - name: Fetch latest CFTC data
+        run: |
+          if [ "${{ inputs.full }}" = "true" ]; then python scripts/update.py --full; else python scripts/update.py; fi
+      - name: Build dashboard
+        run: python scripts/build_site.py
+      - name: Commit updated data
+        run: |
+          git config user.name "cot-bot"
+          git config user.email "cot-bot@users.noreply.github.com"
+          git add data/cot_oil.csv
+          if git diff --cached --quiet; then echo "No data changes"; else git commit -m "Update COT data $(date -u +%F)" && git push; fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
