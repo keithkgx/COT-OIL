@@ -89,7 +89,8 @@ def test_upsert_replaces_revisions_and_sorts(tmp_path):
 
 def test_where_clause_and_url_are_encoded():
     w = fetch.build_where("2024-01-01")
-    assert "'067651'" in w and "like '%BRENT%'" in w and ">= '2024-01-01'" in w
+    assert "'067651'" in w and "'06765T'" in w and ">= '2024-01-01'" in w
+    assert "'06765A'" in w and ">= '2019-03-26'" in w  # per-contract start floor
     url = fetch.build_url("2024-01-01")
     assert " " not in url and "%24select" in url
 
@@ -101,3 +102,38 @@ def test_rows_to_frame_handles_omitted_null_keys():
     df = fetch.rows_to_frame(rows)
     assert df.loc[0, "market"] == "WTI" and df.loc[0, "m_money_long"] == 200000
     assert np.isnan(df.loc[0, "swap_long"])
+
+
+def test_prune_drops_unconfigured_relabels_and_applies_start_floor():
+    keep = make_frame(10, code="06765T"); keep["market"] = "WTI_FIN"  # stale label from an old config
+    stale = make_frame(10, code="02141R"); stale["name"] = "USGC HSFO-PLATTS/BRENT 1ST LN - ICE FUTURES ENERGY DIV"
+    swap_era = make_frame(20, code="06765A", start="2018-12-18")  # before the 2019-03-26 floor
+    out = store.prune(pd.concat([keep, stale, swap_era], ignore_index=True))
+    assert set(out["code"]) == {"06765T", "06765A"}
+    assert (out.loc[out["code"] == "06765T", "market"] == "BRENT").all()
+    assert out.loc[out["code"] == "06765A", "date"].min() >= pd.Timestamp("2019-03-26")
+
+
+def test_driver_names_both_sides_when_both_push():
+    assert metrics.driver(710, -3276) == "short covering + new longs"
+    assert metrics.driver(-3935, 445) == "long liquidation + new shorts"
+
+
+def test_percentile_reading_buckets():
+    assert metrics.percentile_reading(95) == "Near the top of its range"
+    assert metrics.percentile_reading(19) == "Low"
+    assert metrics.percentile_reading(50) == "Mid-range"
+    assert metrics.percentile_reading(float("nan")) == "Not enough history"
+
+
+def test_dashboard_builds(tmp_path):
+    from cot import report
+    parts = []
+    for i, (code, mk, nm) in enumerate([("067651", "WTI", "WTI-PHYSICAL - NYMEX"), ("06765T", "BRENT", "BRENT LAST DAY - NYMEX")]):
+        f = make_frame(300, code=code, seed=i); f["market"] = mk; f["name"] = nm
+        f["traders_mm_long"] = 80; f["traders_mm_short"] = 40
+        parts.append(f)
+    p = report.build(pd.concat(parts, ignore_index=True), tmp_path)
+    page = p.read_text(encoding="utf-8")
+    assert "Net change: 1 week" in page and "Percentile vs last 1 year" in page and "What drove last week" in page
+    assert "WTI crude (NYMEX physical)" in page

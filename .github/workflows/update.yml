@@ -2,11 +2,13 @@ name: Update COT data and publish dashboard
 
 on:
   schedule:
-    # CFTC publishes Fridays ~15:30 US Eastern (19:30/20:30 UTC). Run after that,
-    # plus catch-ups for holiday delays (reports shift to Monday after some holidays).
-    - cron: "0 22 * * 5"
-    - cron: "0 14 * * 6"
-    - cron: "0 14 * * 1"
+    # Every day 22:00 UTC (06:00 Singapore next day). The CFTC publishes Fridays 15:30 US Eastern
+    # (19:30-20:30 UTC) but shifts to Monday/Tuesday after federal holidays, so we simply check daily.
+    # Runs are cheap and idempotent: no new data -> no commit.
+    - cron: "0 22 * * *"
+  push:
+    branches: [main]
+    paths: ["cot/**", "scripts/**", "requirements.txt", ".github/workflows/**"]
   workflow_dispatch:
     inputs:
       full:

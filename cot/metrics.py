@@ -83,9 +83,10 @@ def add_metrics(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def driver(d_long: float, d_short: float) -> str:
-    """Explain a weekly net change as new longs / long liquidation / new shorts / short covering.
+    """Name what drove a weekly net change: new longs / long liquidation / new shorts / short covering.
 
     Net change = d_long - d_short. Long contribution = d_long; short contribution = -d_short.
+    When both sides push the same way, both are named, larger first.
     """
     if d_long is None or d_short is None or np.isnan(d_long) or np.isnan(d_short):
         return "n/a"
@@ -93,20 +94,28 @@ def driver(d_long: float, d_short: float) -> str:
     net = long_c + short_c
     if net == 0:
         return "no net change"
+    names_up = (("new longs", long_c), ("short covering", short_c))
+    names_dn = (("long liquidation", long_c), ("new shorts", short_c))
     if net > 0:
-        main = "new longs" if long_c >= short_c else "short covering"
-        both = long_c > 0 and short_c > 0
+        parts = sorted([(n, v) for n, v in names_up if v > 0], key=lambda t: -t[1])
     else:
-        main = "new shorts" if short_c <= long_c else "long liquidation"
-        both = long_c < 0 and short_c < 0
-    detail = f"longs {d_long:+,.0f}, shorts {d_short:+,.0f}"
-    return f"{main}{' + ' + _second(long_c, short_c, net) if both else ''} ({detail})"
+        parts = sorted([(n, v) for n, v in names_dn if v < 0], key=lambda t: t[1])
+    return " + ".join(n for n, _ in parts)
 
 
-def _second(long_c: float, short_c: float, net: float) -> str:
-    if net > 0:
-        return "short covering" if long_c >= short_c else "new longs"
-    return "long liquidation" if short_c <= long_c else "new shorts"
+def percentile_reading(p: float) -> str:
+    """Plain-English reading of a percentile rank (0 = lowest in window, 100 = highest)."""
+    if p != p:
+        return "Not enough history"
+    if p >= 90:
+        return "Near the top of its range"
+    if p >= 75:
+        return "High"
+    if p > 25:
+        return "Mid-range"
+    if p > 10:
+        return "Low"
+    return "Near the bottom of its range"
 
 
 def _ord(x: float) -> str:
@@ -115,15 +124,3 @@ def _ord(x: float) -> str:
     n = int(round(x))
     suf = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suf}"
-
-
-def summary_sentence(label: str, row: pd.Series) -> str:
-    net = row["m_money_net"]
-    side = "net long" if net >= 0 else "net short"
-    return (
-        f"{label}: Managed Money {side} {abs(net):,.0f} contracts "
-        f"({row['m_money_net_chg_1w']:+,.0f} w/w, {row['m_money_net_chg_4w']:+,.0f} over 4 weeks), "
-        f"{_ord(row['m_money_net_pct_1y'])} percentile of the last year, {_ord(row['m_money_net_pct_3y'])} of three years. "
-        f"Weekly move: {driver(row['m_money_long_chg_1w'], row['m_money_short_chg_1w'])}. "
-        f"Open interest {row['oi']:,.0f} ({row['oi_chg_1w']:+,.0f} w/w)."
-    )

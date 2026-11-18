@@ -13,9 +13,7 @@ cross-contract percentile heatmap. Raw data and computed metrics are downloadabl
 1. Create a GitHub repo and push this folder.
 2. **Settings → Pages → Source: GitHub Actions.**
 3. **Settings → Actions → General → Workflow permissions: Read and write.**
-4. Locally (or in a Codespace): `pip install -r requirements.txt && python scripts/discover.py`
-   and confirm the contract codes in `cot/config.py` match what the CFTC actually publishes
-   (the codes shipped here are unverified).
+4. Optional: `python scripts/discover.py` lists every oil-related contract the CFTC publishes if you want to add more (see the watchlist in `cot/config.py`).
 5. **Actions → "Update COT data and publish dashboard" → Run workflow → tick "full".**
 
 After that it refreshes itself Friday evening (plus Saturday and Monday catch-ups).
@@ -30,3 +28,8 @@ Positions are as of Tuesday, published Friday. CFTC revises past weeks, so each 
 8-week window. Changes are in contracts (never % of a signed number). Percentiles use only the
 trailing window and restart at contract-unit changes or gaps over a quarter. Positioning is shown
 beside price context, not as a trading signal. Design borrows from IngTian/offchart.
+
+## Contracts covered
+WTI (NYMEX physical, ICE, NYMEX financial since 2019), Brent last-day (NYMEX), NY Harbor ULSD, RBOB.
+Note: the CFTC keeps one code per contract across renames, but history can span product changes
+(ULSD was heating oil before late 2013). ICE Brent futures are not in the CFTC report; ICE publishes its own COT.

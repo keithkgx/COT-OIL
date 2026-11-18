@@ -18,9 +18,13 @@ def main() -> int:
     ap.add_argument("--full", action="store_true")
     args = ap.parse_args()
 
-    existing = store.load()
+    existing = store.prune(store.load())
+    have = set(existing["code"]) if not existing.empty else set()
+    new_codes = store.configured_codes() - have  # e.g. a contract just added to config
     last = store.latest_date(existing)
-    if args.full or last is None:
+    if args.full or last is None or new_codes:
+        if new_codes and not args.full:
+            print(f"New contracts in config {sorted(new_codes)} -> backfilling full history")
         since = config.FIRST_DATE
     else:
         since = (last - dt.timedelta(days=config.INCREMENTAL_OVERLAP_DAYS)).strftime("%Y-%m-%d")
@@ -35,7 +39,7 @@ def main() -> int:
     missing = [m.key for m in config.MARKETS if m.key not in got]
     if missing:
         print(f"WARNING: no rows for markets {missing}. Check codes with scripts/discover.py.")
-        if args.full or last is None:
+        if since == config.FIRST_DATE:
             print("ERROR: refusing to save a backfill that is missing configured markets.")
             return 1
 

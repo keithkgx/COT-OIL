@@ -65,22 +65,31 @@ class Market:
     key: str
     label: str
     codes: tuple[str, ...] = ()
-    name_like: tuple[str, ...] = ()  # upper-case substrings of market_and_exchange_names
+    name_like: tuple[str, ...] = ()  # upper-case substrings of market_and_exchange_names (avoid: too broad)
+    start: str | None = None  # ignore rows before this date (the CFTC re-used the code for a different product)
 
     def matches(self, code: str, name: str) -> bool:
         return code in self.codes or any(s in name.upper() for s in self.name_like)
 
 
-# !! VERIFY with `python scripts/discover.py` on first run. Codes below are from
-# memory (not checked against the live API); Brent is matched by name because
-# several Brent contracts exist.
+# Verified against the live API with scripts/discover.py (2026-11-18). The CFTC keeps one
+# code per contract through renames (e.g. 067651 was "CRUDE OIL, LIGHT SWEET" until 2022-02,
+# then "WTI-PHYSICAL"), so we key on codes, never names.
 MARKETS: tuple[Market, ...] = (
     Market("WTI", "WTI crude (NYMEX physical)", codes=("067651",)),
-    Market("WTI_FIN", "WTI financial crude", codes=("06765T",)),
-    Market("BRENT", "Brent crude", name_like=("BRENT",)),
-    Market("ULSD", "NY Harbor ULSD (diesel)", codes=("022651",)),
+    Market("WTI_ICE", "WTI crude (ICE Futures Europe)", codes=("067411",)),
+    # 06765A was a "WTI crude calendar swap" until 2019-03-19; the WTI Financial contract
+    # only starts 2019-03-26 under the same code -> different product, so cut the history.
+    Market("WTI_FIN", "WTI financial crude (NYMEX)", codes=("06765A",), start="2019-03-26"),
+    Market("BRENT", "Brent crude last day (NYMEX)", codes=("06765T",)),
+    Market("ULSD", "NY Harbor ULSD (diesel; heating oil before late 2013)", codes=("022651",)),
     Market("RBOB", "RBOB gasoline", codes=("111659",)),
 )
+
+# Optional watchlist (active contracts you could add later):
+#   0676A5  WTI Houston Argus/WTI trade month (basis)   067A71  WTI Midland Argus vs WTI (basis)
+#   06742T/06742G/06739C  Canadian crude differentials (ICE)   02141R  USGC HSFO Platts/Brent (fuel oil)
+#   111A34  Gulf Coast CBOB vs RBOB (spread)   06665R  Mt Belvieu natural gasoline (NGL)
 
 
 def market_for(code: str, name: str) -> str | None:

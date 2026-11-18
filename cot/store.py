@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from . import config
+
 PATH = Path("data/cot_oil.csv")
 
 
@@ -38,3 +40,24 @@ def save(df: pd.DataFrame, path: Path = PATH) -> None:
 
 def latest_date(df: pd.DataFrame):
     return None if df.empty else df["date"].max()
+
+
+def prune(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only configured contracts (and their start floors); re-derive the market key.
+
+    This makes config changes self-healing: contracts removed from config.MARKETS drop out of
+    the stored history, and a code that moved to a different market is relabelled.
+    """
+    if df.empty:
+        return df
+    df = df.copy()
+    df["market"] = [config.market_for(c, n) for c, n in zip(df["code"], df["name"])]
+    df = df[df["market"].notna()]
+    starts = {c: m.start for m in config.MARKETS for c in m.codes if m.start}
+    floor = pd.to_datetime(df["code"].map(starts))
+    keep = floor.isna() | (df["date"] >= floor)
+    return df[keep].reset_index(drop=True)
+
+
+def configured_codes() -> set[str]:
+    return {c for m in config.MARKETS for c in m.codes}

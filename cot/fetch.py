@@ -21,7 +21,10 @@ def build_where(since: str | None) -> str:
     clauses = []
     for m in config.MARKETS:
         if m.codes:
-            clauses.append("cftc_contract_market_code in (" + ",".join(f"'{_esc(c)}'" for c in m.codes) + ")")
+            c = "cftc_contract_market_code in (" + ",".join(f"'{_esc(x)}'" for x in m.codes) + ")"
+            if m.start:
+                c = f"({c} AND report_date_as_yyyy_mm_dd >= '{_esc(m.start)}')"
+            clauses.append(c)
         for s in m.name_like:
             clauses.append(f"upper(market_and_exchange_names) like '%{_esc(s)}%'")
     where = "(" + " OR ".join(clauses) + ")"
