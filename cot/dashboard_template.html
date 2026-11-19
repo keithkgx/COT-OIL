@@ -1,0 +1,255 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Oil COT positioning monitor</title>
+<script src="%%PLOTLY_SRC%%" charset="utf-8"></script>
+<style>
+*{box-sizing:border-box}
+body{font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;margin:0;color:#212529;background:#f8f9fa}
+main{max-width:1800px;margin:0 auto;padding:0 28px 48px}
+header.top{background:#fff;border-bottom:1px solid #dee2e6;position:sticky;top:0;z-index:20;padding:6px 28px;display:flex;flex-wrap:wrap;gap:6px 28px;align-items:center;justify-content:space-between}
+header.top nav a{margin-right:14px;text-decoration:none;color:#1c7ed6;font-size:14px;white-space:nowrap}
+.ctl{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:14px}
+.ctl label{color:#6c757d;font-weight:600}
+.ctl button,.ctl select{font:inherit;padding:4px 10px;border:1px solid #ced4da;background:#fff;border-radius:6px;cursor:pointer}
+.ctl button:hover{background:#f1f3f5} .ctl .seg button{border-radius:0;margin-left:-1px} .ctl .seg button:first-child{border-radius:6px 0 0 6px} .ctl .seg button:last-child{border-radius:0 6px 6px 0}
+.ctl .seg button.on{background:#1c7ed6;color:#fff;border-color:#1c7ed6}
+h1{margin:.5em 0 .1em} h2{margin-top:2em;border-bottom:2px solid #dee2e6;padding-bottom:4px;scroll-margin-top:64px} h3{margin:0 0 2px} h4{margin:0 0 2px;font-size:15px}
+.meta,.muted{color:#6c757d;font-size:13px} .intro{color:#495057;max-width:1100px;margin:.4em 0 .8em}
+.banner{background:#e7f5ff;border:1px solid #a5d8ff;border-radius:6px;padding:8px 14px;margin:10px 0;font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(500px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:14px 18px}
+.card ul{margin:.6em 0 0;padding-left:20px} .card li{margin:.35em 0}
+.cnote{background:#fff4e6;border-radius:6px;padding:6px 10px;font-size:12.5px;color:#7c4a03;margin:.6em 0 0}
+.tablewrap{overflow-x:auto;background:#fff;border:1px solid #dee2e6;border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:14px} th,td{border-bottom:1px solid #eee;padding:6px 12px;text-align:right;white-space:nowrap}
+th{background:#f1f3f5;position:sticky;top:0} th.l,td.l{text-align:left} td.na{color:#adb5bd}
+tr.chead td{background:#e9ecef;font-weight:700;border-top:2px solid #ced4da} tr.mm td{background:#fff4e6;font-weight:600}
+.up{color:#2b8a3e} .dn{color:#c92a2a}
+.note{background:#fff9db;padding:10px 14px;border-radius:6px;font-size:14px;margin:12px 0}
+.ranges{display:grid;grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:16px;margin-top:12px}
+.rbox{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:12px 18px 8px}
+.rb{margin:14px 0 6px} .rbhead{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:34px}
+.track{position:relative;height:12px;background:#e9ecef;border-radius:6px}
+.band{position:absolute;top:0;height:12px;background:#adb5bd;border-radius:6px}
+.med{position:absolute;top:-3px;width:2px;height:18px;background:#495057}
+.now{position:absolute;top:-4px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#d9480f;border:3px solid #fff;box-shadow:0 0 0 1px #d9480f}
+.nowlbl{position:absolute;top:-26px;font-size:12.5px;font-weight:700;color:#d9480f;white-space:nowrap}
+.rbl{display:flex;justify-content:space-between;font-size:12px;color:#495057;margin-top:6px}
+.legend2{font-size:12.5px;color:#6c757d;margin:8px 0 0}
+.chartsgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:10px}
+.chart{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:10px 12px 4px;min-width:0}
+.cap{font-size:12.5px;color:#6c757d;margin:0 0 4px}
+@media(max-width:1100px){.chartsgrid{grid-template-columns:1fr}.cards{grid-template-columns:1fr}.ranges{grid-template-columns:1fr}}
+details{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:8px 16px;margin:8px 0}
+summary{cursor:pointer;font-weight:700} details p,details li{max-width:1100px}
+details table{width:auto;font-size:13.5px;margin:8px 0} details th{position:static}
+</style></head><body>
+<header class=top>
+<nav>%%NAV%%</nav>
+<div class=ctl>
+ <label for=week>Week</label>
+ <button id=prev title="Previous report week">&#9664;</button>
+ <select id=week></select>
+ <button id=next title="Next report week">&#9654;</button>
+ <button id=latest>Latest</button>
+ <label style="margin-left:10px">Charts</label>
+ <span class=seg id=spans><button data-span=1>1y</button><button data-span=3>3y</button><button data-span=5 class=on>5y</button><button data-span=10>10y</button><button data-span=all>All</button></span>
+</div>
+</header>
+<main>
+<h1>Oil COT positioning monitor</h1>
+<p class=meta id=ctx></p>
+<div id=banner></div>
+
+<h2 id=summary>Summary for the selected week</h2>
+<p class=intro>One card per contract, focused on <b>Managed Money</b>, the speculative funds. Pick any past week with the selector above to see how positioning stood then and how it changed from the previous week.
+All contracts here are 1,000-barrel contracts (or the equivalent), so <b>1,000 contracts = 1 million barrels</b>. Every figure is explained in the <a href="#guide">guide</a> at the bottom.</p>
+<div id=cards class=cards></div>
+
+<h2 id=table>Positioning by trader group</h2>
+<p class=intro>Every trader group in every contract, with <b>Managed Money highlighted</b>. <i>Net position</i> = long minus short. Compare the selected week with the previous week, and with four weeks ago (roughly a month).
+The five groups add up to zero in each contract: every long has a short on the other side, so when funds are net long, other groups are net short in total.</p>
+<div class=tablewrap id=tbl></div>
+
+<h2 id=percentiles>How extreme is Managed Money positioning?</h2>
+<p class=intro>A percentile ranks this week's net position against the weekly readings of the past year (and three years). The bars below turn that rank into real numbers: the left end is the <b>lowest</b> net position in the window (0th percentile), the right end the <b>highest</b> (100th percentile).</p>
+<div id=pexp></div>
+<div id=ranges class=ranges></div>
+<p class=legend2>Grey band = the middle 50% of weeks (25th to 75th percentile). Dark tick = median. Orange dot = the selected week. Percentiles only use data available up to each date, so past weeks are judged on what was known then.</p>
+
+<h2 id=charts>History charts</h2>
+<p class=intro>The dotted vertical line marks the selected week. Use the <b>Charts</b> buttons at the top to change the time span of every chart at once.</p>
+%%CHARTS%%
+
+<h2 id=guide>Guide: how to read this page</h2>
+%%GUIDE%%
+
+<p class=meta>Source: U.S. Commodity Futures Trading Commission, public reporting environment (Disaggregated COT, futures only). Page built %%BUILT%% UTC by GitHub Actions. Not investment advice.</p>
+</main>
+<script>
+const DATA=%%DATA%%;
+(function(){
+'use strict';
+const COH=[["m_money","Managed Money"],["prod_merc","Producers / Merchants"],["swap","Swap Dealers"],["other_rept","Other Reportables"],["nonrept","Non-reportable (small)"]];
+const nf=new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
+const nf1=new Intl.NumberFormat('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+const isn=x=>x===null||x===undefined||Number.isNaN(x);
+const esc=s=>String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const fmt=x=>isn(x)?'n/a':nf.format(Math.round(x));
+const sgn=x=>isn(x)?'n/a':(Math.round(x)>0?'+':'')+nf.format(Math.round(x));
+const bbl=(x,c)=>isn(x)?'n/a':nf1.format(Math.abs(x)*c.bpc/1e6);
+const sbbl=(x,c)=>isn(x)?'n/a':(x>0?'+':x<0?'-':'')+nf1.format(Math.abs(x)*c.bpc/1e6);
+const ord=p=>{if(isn(p))return 'n/a';const n=Math.round(p),t=n%100;const s=(t>=11&&t<=13)?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th');return n+s;};
+const reading=p=>isn(p)?'Not enough history':p>=90?'Near the top of its range':p>=75?'High':p>25?'Mid-range':p>10?'Low':'Near the bottom of its range';
+const dfmt=(d,o)=>new Date(d+'T00:00:00Z').toLocaleDateString('en-GB',Object.assign({timeZone:'UTC'},o||{day:'numeric',month:'short',year:'numeric'}));
+const dlong=d=>dfmt(d,{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+const days=(a,b)=>Math.round((new Date(a+'T00:00:00Z')-new Date(b+'T00:00:00Z'))/864e5);
+const $=id=>document.getElementById(id);
+
+const C=DATA.contracts;
+C.forEach(c=>{c.idx={};c.dates.forEach((d,i)=>{c.idx[d]=i;});});
+const ALL=Array.from(new Set([].concat(...C.map(c=>c.dates)))).sort();
+const LATEST=ALL[ALL.length-1];
+let sel=LATEST, span=5;
+
+const prevDate=(c,i)=>(i>0&&days(c.dates[i],c.dates[i-1])<=10)?c.dates[i-1]:null;
+const dcell=x=>{if(isn(x))return '<td class=na>n/a</td>';const k=x>0?'up':x<0?'dn':'';const a=x>0?'&#9650; ':x<0?'&#9660; ':'';return `<td class="${k}">${a}${sgn(x)}</td>`;};
+const pcell=p=>{if(isn(p))return '<td class=na>n/a</td>';const bg=p>=50?`rgba(217,72,15,${(0.12+0.6*(p-50)/50).toFixed(2)})`:`rgba(28,126,214,${(0.12+0.6*(50-p)/50).toFixed(2)})`;return `<td style="background:${bg}">${Math.round(p)}</td>`;};
+
+function card(c){
+  const i=c.idx[sel];
+  const head=`<h3>${esc(c.title)}</h3><div class=muted>${esc(c.name)} &middot; ${esc(c.size)}</div>`;
+  const note=c.note?`<div class=cnote>${esc(c.note)}</div>`:'';
+  if(i===undefined) return `<div class=card>${head}<p class=muted>No report for this contract in the week of ${esc(dlong(sel))}.</p>${note}</div>`;
+  const f=c.f, v=k=>f[k][i], net=v('m_money_net');
+  if(isn(net)) return `<div class=card>${head}<p class=muted>No Managed Money data for this week.</p>${note}</div>`;
+  const pd=prevDate(c,i), pw=pd?dfmt(pd):'previous week';
+  const drv=f.driver[i];
+  const detail=(drv&&drv!=='n/a')?` <span class=muted>(longs ${sgn(v('m_money_long_chg_1w'))}, shorts ${sgn(v('m_money_short_chg_1w'))})</span>`:'';
+  const tr=isn(v('traders_mm_long'))?'':`<li><b>Managed Money traders:</b> ${fmt(v('traders_mm_long'))} long &middot; ${fmt(v('traders_mm_short'))} short</li>`;
+  const pct=isn(v('mm_net_pct_oi'))?'':`<li><b>Net as % of open interest:</b> ${v('mm_net_pct_oi').toFixed(1)}%</li>`;
+  return `<div class=card>${head}<ul>
+<li><b>Managed Money net position:</b> ${fmt(Math.abs(net))} contracts <b>${net>=0?'net long':'net short'}</b> <span class=muted>(&asymp; ${bbl(net,c)} million barrels; long ${fmt(v('m_money_long'))} &middot; short ${fmt(v('m_money_short'))})</span></li>
+<li><b>Change vs previous week (${esc(pw)}):</b> ${sgn(v('m_money_net_chg_1w'))} contracts <span class=muted>(${sbbl(v('m_money_net_chg_1w'),c)} million barrels)</span></li>
+<li><b>Change vs 4 weeks ago:</b> ${sgn(v('m_money_net_chg_4w'))} contracts <span class=muted>(${sbbl(v('m_money_net_chg_4w'),c)} million barrels)</span></li>
+${pct}
+<li><b>Versus its own history:</b> ${ord(v('m_money_net_pct_1y'))} percentile of the last year (${esc(reading(v('m_money_net_pct_1y')).toLowerCase())}), ${ord(v('m_money_net_pct_3y'))} percentile of the last three years</li>
+<li><b>What drove the week's move:</b> ${esc(drv||'n/a')}${detail}</li>
+<li><b>Open interest:</b> ${fmt(v('oi'))} contracts (${sgn(v('oi_chg_1w'))} vs previous week)</li>
+${tr}</ul>${note}</div>`;
+}
+
+function tableHTML(){
+  let h='<table><thead><tr><th class=l>Contract / trader group</th><th>Long</th><th>Short</th><th>Net position</th><th>Net: previous week</th><th>Change vs previous week</th><th>Change vs 4 weeks ago</th><th>Percentile vs last 1 year</th><th>Percentile vs last 3 years</th></tr></thead><tbody>';
+  C.forEach(c=>{
+    const i=c.idx[sel];
+    if(i===undefined){h+=`<tr class=chead><td class=l colspan=9>${esc(c.title)} <span class=muted>&mdash; no report this week</span></td></tr>`;return;}
+    const f=c.f;
+    h+=`<tr class=chead><td class=l colspan=9>${esc(c.title)} <span class=muted>&middot; ${esc(c.size)} &middot; open interest ${fmt(f.oi[i])} contracts (${sgn(f.oi_chg_1w[i])} vs previous week)</span></td></tr>`;
+    COH.forEach(([k,label])=>{
+      const net=f[k+'_net'][i], ch=f[k+'_net_chg_1w'][i];
+      const prev=(isn(net)||isn(ch))?null:net-ch;
+      h+=`<tr class="${k==='m_money'?'mm':''}"><td class=l>${esc(label)}</td><td>${fmt(f[k+'_long'][i])}</td><td>${fmt(f[k+'_short'][i])}</td><td><b>${sgn(net)}</b></td><td>${prev===null?'n/a':sgn(prev)}</td>${dcell(ch)}${dcell(f[k+'_net_chg_4w'][i])}${pcell(f[k+'_net_pct_1y'][i])}${pcell(f[k+'_net_pct_3y'][i])}</tr>`;
+    });
+  });
+  return h+'</tbody></table>';
+}
+
+function rangeBar(c,i,w,label){
+  const f=c.f, now=f.m_money_net[i], p=f['m_money_net_pct_'+w][i];
+  const mn=f['m_money_net_min_'+w][i], mx=f['m_money_net_max_'+w][i];
+  const head=`<div class=rbhead><b>${label}</b><span>${isn(p)?'Not enough history for this window':ord(p)+' percentile &middot; '+esc(reading(p))}</span></div>`;
+  if(isn(now)||isn(mn)||isn(mx)||mx===mn) return `<div class=rb>${head}<div class=muted>No usable range for this window.</div></div>`;
+  const pos=v=>Math.max(0,Math.min(100,(v-mn)/(mx-mn)*100));
+  const p25=pos(f['m_money_net_p25_'+w][i]), p75=pos(f['m_money_net_p75_'+w][i]), md=pos(f['m_money_net_med_'+w][i]), np=pos(now);
+  const lblStyle=np<14?'left:0':np>86?'right:0':`left:${np}%;transform:translateX(-50%)`;
+  return `<div class=rb>${head}<div class=track>
+<div class=band style="left:${p25}%;width:${Math.max(p75-p25,0.5)}%"></div><div class=med style="left:${md}%"></div>
+<div class=nowlbl style="${lblStyle}">${sgn(now)}</div><div class=now style="left:${np}%"></div></div>
+<div class=rbl><span>Lowest (0th): ${sgn(mn)}</span><span>Median: ${sgn(f['m_money_net_med_'+w][i])}</span><span>Highest (100th): ${sgn(mx)}</span></div></div>`;
+}
+function rangesHTML(){
+  return C.map(c=>{
+    const i=c.idx[sel];
+    if(i===undefined) return `<div class=rbox><h4>${esc(c.title)}</h4><div class=muted>No report this week.</div></div>`;
+    return `<div class=rbox><h4>${esc(c.title)}</h4><div class=muted>Managed Money net position, in contracts (${esc(c.size)})</div>${rangeBar(c,i,'1y','Last 1 year')}${rangeBar(c,i,'3y','Last 3 years')}</div>`;
+  }).join('');
+}
+function explainer(){
+  for(const c of C){
+    const i=c.idx[sel]; if(i===undefined) continue;
+    const f=c.f, p=f.m_money_net_pct_1y[i], now=f.m_money_net[i], mn=f.m_money_net_min_1y[i], mx=f.m_money_net_max_1y[i];
+    if(isn(p)||isn(mn)||isn(mx)) continue;
+    return `<div class=note><b>Worked example.</b> ${esc(c.title)}: Managed Money is ${now>=0?'net long':'net short'} ${fmt(Math.abs(now))} contracts, the <b>${ord(p)} percentile</b> of the last year.
+Over that year the lowest reading was ${sgn(mn)} contracts (0th percentile) and the highest ${sgn(mx)} (100th percentile), so funds held a net position at or below today's in about ${Math.round(p)}% of the weeks.
+${p<50?'That is on the low side of its own range':'That is on the high side of its own range'}. Note that a fund group can be net long and still sit at a low percentile if it is less long than usual.</div>`;
+  }
+  return '';
+}
+
+function render(){
+  const k=ALL.indexOf(sel), prevAll=k>0?ALL[k-1]:null;
+  $('ctx').innerHTML=`Showing the report for positions as of <b>${esc(dlong(sel))}</b>${prevAll?`, compared with the previous week (${esc(dlong(prevAll))})`:''}. CFTC Disaggregated COT, futures only; the CFTC normally publishes the following Friday at 15:30 US Eastern (later in holiday weeks). Latest report in this page: <b>${esc(dlong(LATEST))}</b>.`;
+  const behind=Math.round(days(LATEST,sel)/7);
+  $('banner').innerHTML=sel===LATEST?'':`<div class=banner>You are viewing a past week (${behind} week${behind===1?'':'s'} before the latest report). Percentiles are as they stood on that date. <a href="#" id=jump>Back to the latest week</a></div>`;
+  const j=$('jump'); if(j) j.onclick=e=>{e.preventDefault();setSel(LATEST);};
+  $('cards').innerHTML=C.map(card).join('');
+  $('tbl').innerHTML=tableHTML();
+  $('pexp').innerHTML=explainer();
+  $('ranges').innerHTML=rangesHTML();
+  $('week').value=sel;
+}
+function addMonths(d,m){const t=new Date(d+'T00:00:00Z');t.setUTCMonth(t.getUTCMonth()+m);return t.toISOString().slice(0,10);}
+function yWindow(id,start,end){
+  const m=/^ch-([^-]+)-(net|groups|oi|chg)$/.exec(id); if(!m) return null;
+  const c=C.find(x=>x.code===m[1]); if(!c) return null;
+  let lo=Infinity, hi=-Infinity; const add=v=>{if(!isn(v)){if(v<lo)lo=v;if(v>hi)hi=v;}};
+  const f=c.f;
+  for(let i=0;i<c.dates.length;i++){
+    const d=c.dates[i]; if(d<start||d>end) continue;
+    if(m[2]==='net') add(f.m_money_net[i]);
+    else if(m[2]==='groups') COH.forEach(([k])=>add(f[k+'_net'][i]));
+    else if(m[2]==='oi') add(f.oi[i]);
+    else{const a=f.m_money_long_chg_1w[i], b=f.m_money_short_chg_1w[i];
+      if(!isn(a)){const sb=isn(b)?0:-b;add(Math.max(a,0)+Math.max(sb,0));add(Math.min(a,0)+Math.min(sb,0));}
+      add(f.m_money_net_chg_1w[i]);}
+  }
+  if(!isFinite(lo)||!isFinite(hi)) return null;
+  const pad=((hi-lo)||Math.abs(hi)||1)*0.06; return [lo-pad,hi+pad];
+}
+function applyRange(){
+  if(!window.Plotly) return;
+  DATA.charts.forEach(id=>{
+    const gd=$(id); if(!gd) return;
+    try{
+      if(span==='all'){window.Plotly.relayout(gd,{'xaxis.autorange':true,'yaxis.autorange':true});}
+      else{
+        let end=LATEST, start=addMonths(end,-12*span);
+        if(sel<start){start=addMonths(sel,-Math.round(span*12*0.3));end=addMonths(start,12*span);}
+        const upd={'xaxis.range':[start,end]}; const yr=yWindow(id,start,end); if(yr) upd['yaxis.range']=yr;
+        window.Plotly.relayout(gd,upd);
+      }
+    }catch(e){}
+  });
+}
+function applyMarker(){
+  if(!window.Plotly) return;
+  DATA.charts.forEach(id=>{
+    const gd=$(id); if(!gd) return;
+    try{window.Plotly.relayout(gd,{shapes:[{type:'line',xref:'x',yref:'paper',x0:sel,x1:sel,y0:0,y1:1,line:{color:'#495057',width:1.5,dash:'dot'}}]});}catch(e){}
+  });
+}
+function setSel(d){ if(ALL.indexOf(d)<0) return; sel=d; render(); applyMarker(); applyRange(); }
+
+const wk=$('week');
+wk.innerHTML=ALL.slice().reverse().map(d=>`<option value="${d}">${esc(dlong(d))}</option>`).join('');
+wk.onchange=()=>setSel(wk.value);
+$('prev').onclick=()=>{const k=ALL.indexOf(sel);if(k>0)setSel(ALL[k-1]);};
+$('next').onclick=()=>{const k=ALL.indexOf(sel);if(k<ALL.length-1)setSel(ALL[k+1]);};
+$('latest').onclick=()=>setSel(LATEST);
+$('spans').onclick=e=>{const b=e.target.closest('button');if(!b)return;span=b.dataset.span==='all'?'all':Number(b.dataset.span);
+  Array.from($('spans').children).forEach(x=>x.classList.toggle('on',x===b));applyRange();};
+render();
+window.__cot={setSel,render,get sel(){return sel;},ALL};
+})();
+</script>
+</body></html>

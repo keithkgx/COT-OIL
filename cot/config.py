@@ -67,6 +67,9 @@ class Market:
     codes: tuple[str, ...] = ()
     name_like: tuple[str, ...] = ()  # upper-case substrings of market_and_exchange_names (avoid: too broad)
     start: str | None = None  # ignore rows before this date (the CFTC re-used the code for a different product)
+    barrels: int = 1000  # barrels (or barrel-equivalents) per contract
+    size_text: str = "1 contract = 1,000 barrels"
+    note: str = ""  # shown on the dashboard when the contract needs a caveat
 
     def matches(self, code: str, name: str) -> bool:
         return code in self.codes or any(s in name.upper() for s in self.name_like)
@@ -75,17 +78,21 @@ class Market:
 # Verified against the live API with scripts/discover.py (2026-11-18). The CFTC keeps one
 # code per contract through renames (e.g. 067651 was "CRUDE OIL, LIGHT SWEET" until 2022-02,
 # then "WTI-PHYSICAL"), so we key on codes, never names.
+GALLON_SIZE = "1 contract = 42,000 US gallons = 1,000 barrels"
 MARKETS: tuple[Market, ...] = (
     Market("WTI", "WTI crude (NYMEX physical)", codes=("067651",)),
     Market("WTI_ICE", "WTI crude (ICE Futures Europe)", codes=("067411",)),
-    # 06765A was a "WTI crude calendar swap" until 2019-03-19; the WTI Financial contract
-    # only starts 2019-03-26 under the same code -> different product, so cut the history.
-    Market("WTI_FIN", "WTI financial crude (NYMEX)", codes=("06765A",), start="2019-03-26"),
-    Market("BRENT", "Brent crude last day (NYMEX)", codes=("06765T",)),
-    Market("ULSD", "NY Harbor ULSD (diesel; heating oil before late 2013)", codes=("022651",)),
-    Market("RBOB", "RBOB gasoline", codes=("111659",)),
+    Market("BRENT", "Brent crude last day (NYMEX)", codes=("06765T",),
+           note="Small contract. This is the NYMEX look-alike of Brent, not ICE Brent (the main Brent benchmark), "
+                "which is not in the CFTC report. Treat it as a sample of Brent positioning, not the whole market."),
+    Market("ULSD", "NY Harbor ULSD (diesel)", codes=("022651",), size_text=GALLON_SIZE,
+           note="Before late 2013 the same CFTC code covers NY Harbor heating oil."),
+    Market("RBOB", "RBOB gasoline", codes=("111659",), size_text=GALLON_SIZE),
 )
 
+# Dropped: 06765A "WTI financial crude" reports zero Managed Money positions (all funds sit in other
+# groups), so every Managed Money statistic for it is meaningless. A `start` date was also needed
+# because the CFTC re-used that code for a calendar swap before 2019-03-26.
 # Optional watchlist (active contracts you could add later):
 #   0676A5  WTI Houston Argus/WTI trade month (basis)   067A71  WTI Midland Argus vs WTI (basis)
 #   06742T/06742G/06739C  Canadian crude differentials (ICE)   02141R  USGC HSFO Platts/Brent (fuel oil)

@@ -25,7 +25,13 @@ WINDOWS = {"1y": 52, "3y": 156}
 def rolling_percentile(s: pd.Series, window: int, min_periods: int | None = None) -> pd.Series:
     """Percent (0-100) of the trailing `window` observations (including today) that are <= today."""
     mp = min_periods if min_periods is not None else max(window // 2, 8)
-    return s.rolling(window, min_periods=mp).apply(lambda w: float((w <= w[-1]).mean() * 100), raw=True)
+
+    def rank(w):
+        if np.nanmax(w) == np.nanmin(w):  # no variation (e.g. a group that never trades) -> a rank is meaningless
+            return np.nan
+        return float((w <= w[-1]).mean() * 100)
+
+    return s.rolling(window, min_periods=mp).apply(rank, raw=True)
 
 
 def add_segments(g: pd.DataFrame) -> pd.Series:
@@ -70,6 +76,16 @@ def _add_one(g: pd.DataFrame) -> pd.DataFrame:
     for c in COHORTS:
         for label, w in WINDOWS.items():
             g[f"{c}_net_pct_{label}"] = g.groupby("segment")[f"{c}_net"].transform(lambda s, w=w: rolling_percentile(s, w))
+    # Managed Money range statistics over the same trailing windows, so the dashboard can show what a
+    # percentile means in contracts (0th = lowest, 100th = highest, plus the middle 50% band and median).
+    for label, w in WINDOWS.items():
+        mp = max(w // 2, 8)
+        grp = g.groupby("segment")["m_money_net"]
+        g[f"m_money_net_min_{label}"] = grp.transform(lambda s, w=w, mp=mp: s.rolling(w, min_periods=mp).min())
+        g[f"m_money_net_p25_{label}"] = grp.transform(lambda s, w=w, mp=mp: s.rolling(w, min_periods=mp).quantile(0.25))
+        g[f"m_money_net_med_{label}"] = grp.transform(lambda s, w=w, mp=mp: s.rolling(w, min_periods=mp).median())
+        g[f"m_money_net_p75_{label}"] = grp.transform(lambda s, w=w, mp=mp: s.rolling(w, min_periods=mp).quantile(0.75))
+        g[f"m_money_net_max_{label}"] = grp.transform(lambda s, w=w, mp=mp: s.rolling(w, min_periods=mp).max())
     for label, w in WINDOWS.items():
         g[f"mm_net_pct_oi_pct_{label}"] = g.groupby("segment")["mm_net_pct_oi"].transform(lambda s, w=w: rolling_percentile(s, w))
     return g
@@ -124,3 +140,23 @@ def _ord(x: float) -> str:
     n = int(round(x))
     suf = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suf}"
+
+
+def coverage(df: pd.DataFrame) -> pd.DataFrame:
+    """Per-contract data coverage: first/last week, number of weeks, and missing weeks (gaps > 10 days)."""
+    rows = []
+    for code, g in df.sort_values("date").groupby("code", sort=False):
+        d = g["date"]
+        gaps = int((d.diff().dt.days > 10).sum())
+        rows.append({"code": code, "first": d.min(), "last": d.max(), "weeks": len(g), "gaps": gaps})
+    return pd.DataFrame(rows)
+
+
+def net_sum_check(df: pd.DataFrame, tol: float = 5) -> pd.DataFrame:
+    """Every long has a short on the other side, so the five groups' net positions must add to ~0.
+
+    Returns the rows where they do not (a sign of a wrong column mapping or a bad download)."""
+    total = sum(df[f"{c}_long"] - df[f"{c}_short"] for c in COHORTS)
+    bad = df.loc[total.abs() > tol, ["code", "date"]].copy()
+    bad["net_sum"] = total[bad.index]
+    return bad

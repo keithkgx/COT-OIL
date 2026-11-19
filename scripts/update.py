@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from cot import config, fetch, store  # noqa: E402
+from cot import config, fetch, metrics, store  # noqa: E402
 
 
 def main() -> int:
@@ -44,7 +44,12 @@ def main() -> int:
             return 1
 
     out = store.upsert(existing, new)
+    bad = metrics.net_sum_check(out[out["date"] >= out["date"].max() - dt.timedelta(days=60)])
+    if not bad.empty:
+        print(f"WARNING: group net positions do not sum to zero in {len(bad)} recent rows (check column mapping):")
+        print(bad.head(10).to_string(index=False))
     store.save(out)
+    print(metrics.coverage(out).to_string(index=False))
     print(f"Stored {len(out):,} rows; latest report date {out['date'].max():%Y-%m-%d}; "
           f"{new['date'].nunique()} weeks fetched.")
     return 0

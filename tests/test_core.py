@@ -90,7 +90,7 @@ def test_upsert_replaces_revisions_and_sorts(tmp_path):
 def test_where_clause_and_url_are_encoded():
     w = fetch.build_where("2024-01-01")
     assert "'067651'" in w and "'06765T'" in w and ">= '2024-01-01'" in w
-    assert "'06765A'" in w and ">= '2019-03-26'" in w  # per-contract start floor
+    assert "06765A" not in w  # WTI financial dropped: Managed Money is always zero there
     url = fetch.build_url("2024-01-01")
     assert " " not in url and "%24select" in url
 
@@ -104,10 +104,11 @@ def test_rows_to_frame_handles_omitted_null_keys():
     assert np.isnan(df.loc[0, "swap_long"])
 
 
-def test_prune_drops_unconfigured_relabels_and_applies_start_floor():
+def test_prune_drops_unconfigured_relabels_and_applies_start_floor(monkeypatch):
+    monkeypatch.setattr(config, "MARKETS", config.MARKETS + (config.Market("SWAPERA", "x", codes=("06765A",), start="2019-03-26"),))
     keep = make_frame(10, code="06765T"); keep["market"] = "WTI_FIN"  # stale label from an old config
     stale = make_frame(10, code="02141R"); stale["name"] = "USGC HSFO-PLATTS/BRENT 1ST LN - ICE FUTURES ENERGY DIV"
-    swap_era = make_frame(20, code="06765A", start="2018-12-18")  # before the 2019-03-26 floor
+    swap_era = make_frame(20, code="06765A", start="2018-12-18")  # straddles the 2019-03-26 floor
     out = store.prune(pd.concat([keep, stale, swap_era], ignore_index=True))
     assert set(out["code"]) == {"06765T", "06765A"}
     assert (out.loc[out["code"] == "06765T", "market"] == "BRENT").all()
@@ -126,14 +127,71 @@ def test_percentile_reading_buckets():
     assert metrics.percentile_reading(float("nan")) == "Not enough history"
 
 
-def test_dashboard_builds(tmp_path):
-    from cot import report
+def _payload_from(page: str) -> dict:
+    import json
+    start = page.index("const DATA=") + len("const DATA=")
+    end = page.index(";\n(function(){", start)
+    return json.loads(page[start:end])
+
+
+def _two_contract_frame(n=300):
     parts = []
     for i, (code, mk, nm) in enumerate([("067651", "WTI", "WTI-PHYSICAL - NYMEX"), ("06765T", "BRENT", "BRENT LAST DAY - NYMEX")]):
-        f = make_frame(300, code=code, seed=i); f["market"] = mk; f["name"] = nm
+        f = make_frame(n, code=code, seed=i, start="2020-01-07"); f["market"] = mk; f["name"] = nm
         f["traders_mm_long"] = 80; f["traders_mm_short"] = 40
         parts.append(f)
-    p = report.build(pd.concat(parts, ignore_index=True), tmp_path)
-    page = p.read_text(encoding="utf-8")
-    assert "Net change: 1 week" in page and "Percentile vs last 1 year" in page and "What drove last week" in page
-    assert "WTI crude (NYMEX physical)" in page
+    return pd.concat(parts, ignore_index=True)
+
+
+def test_dashboard_builds_with_all_requested_sections(tmp_path):
+    from cot import report
+    page = report.build(_two_contract_frame(), tmp_path).read_text(encoding="utf-8")
+    for needle in ['id=week', 'id=prev', 'id=next', 'id=spans',                      # week picker + chart span buttons
+                   'Positioning by trader group', 'How extreme is Managed Money positioning?', 'Guide: how to read this page',
+                   'What drove the week', 'Percentiles and the range bars', 'Contracts, long, short and net',
+                   '1,000 contracts = 1 million barrels', 'data through']:
+        assert needle in page, needle
+    for key in ("net", "groups", "oi", "chg"):
+        assert f"ch-067651-{key}" in page
+    assert "Net as % of open interest" in page and "Missing weeks" in page
+
+
+def test_payload_is_valid_json_with_aligned_arrays_and_sane_ranges(tmp_path):
+    from cot import report
+    p = _payload_from(report.build(_two_contract_frame(), tmp_path).read_text(encoding="utf-8"))
+    assert [c["key"] for c in p["contracts"]] == ["WTI", "BRENT"]
+    c = p["contracts"][0]
+    n = len(c["dates"])
+    assert all(len(v) == n for v in c["f"].values())
+    for i in range(n):
+        vals = [c["f"][f"m_money_net_{s}_1y"][i] for s in ("min", "p25", "med", "p75", "max")]
+        if None not in vals:
+            assert vals == sorted(vals)
+            assert vals[0] <= c["f"]["m_money_net"][i] <= vals[-1]
+
+
+def test_chart_ranges_are_explicit_iso_dates_and_end_at_latest_week(tmp_path):
+    import re
+    from cot import report
+    df = _two_contract_frame()
+    page = report.build(df, tmp_path).read_text(encoding="utf-8")
+    last = df["date"].max().strftime("%Y-%m-%d")
+    ranges = re.findall(r'"xaxis":\{[^}]*?"range":\["(\d{4}-\d{2}-\d{2})","(\d{4}-\d{2}-\d{2})"\]', page)
+    assert ranges and all(r[1] == last for r in ranges)
+    assert "bdata" not in page.split("const DATA=")[0]  # charts carry plain lists, not typed-array blobs
+
+
+def test_constant_series_has_no_percentile():
+    s = pd.Series([0.0] * 80)
+    assert metrics.rolling_percentile(s, 52).isna().all()
+
+
+def test_net_sum_check_flags_unbalanced_rows():
+    df = make_frame(5)
+    for c in config.COHORT_COLUMNS:
+        df[f"{c}_long"] = 100.0
+        df[f"{c}_short"] = 100.0
+    assert metrics.net_sum_check(df).empty
+    df.loc[2, "m_money_long"] = 5000.0
+    bad = metrics.net_sum_check(df)
+    assert len(bad) == 1 and bad["net_sum"].iloc[0] == 4900.0

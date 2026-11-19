@@ -4,10 +4,10 @@ Auto-updating dashboard of speculative positioning in oil futures, built from th
 **Disaggregated Commitments of Traders** (futures only). Runs entirely on GitHub Actions and
 publishes to GitHub Pages — no machine of yours has to stay on.
 
-**What it shows:** Managed Money long/short/net, weekly and 4-week changes, what drove the
-weekly change (new longs vs short covering vs new shorts vs long liquidation), 1-year and 3-year
-net-position percentiles (no look-ahead) for every trader group, open interest, and a
-cross-contract percentile heatmap. Raw data and computed metrics are downloadable as CSV.
+**What it shows** (pick any past week with the selector; every figure is explained in the on-page guide):
+per-contract summary cards for Managed Money, one table of every trader group (week vs previous week and
+vs four weeks ago), percentile range bars that show what 0th/100th percentile mean in contracts, and four
+history charts per contract. Raw data and calculated metrics are downloadable as CSV.
 
 ## Setup (once)
 1. Create a GitHub repo and push this folder.
@@ -30,6 +30,11 @@ trailing window and restart at contract-unit changes or gaps over a quarter. Pos
 beside price context, not as a trading signal. Design borrows from IngTian/offchart.
 
 ## Contracts covered
-WTI (NYMEX physical, ICE, NYMEX financial since 2019), Brent last-day (NYMEX), NY Harbor ULSD, RBOB.
+WTI (NYMEX physical and ICE), Brent last-day (NYMEX), NY Harbor ULSD, RBOB. (WTI financial was dropped: it reports no Managed Money positions.)
 Note: the CFTC keeps one code per contract across renames, but history can span product changes
 (ULSD was heating oil before late 2013). ICE Brent futures are not in the CFTC report; ICE publishes its own COT.
+
+## Development
+`python -m pytest -q` runs the unit tests. The dashboard is `cot/dashboard_template.html` (layout and the script that
+renders the selected week) filled by `cot/report.py`. Library versions are pinned in `requirements.txt` so local and
+GitHub builds match.
